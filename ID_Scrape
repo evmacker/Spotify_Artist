@@ -1,0 +1,208 @@
+!pip install spotipy
+!pip install selenium
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
+
+import spotipy
+from spotipy.oauth2 import SpotifyClientCredentials
+import pandas as pd
+import json
+import requests
+import ssl
+from datetime import datetime
+import urllib.request, urllib.parse, urllib.error
+import pandas as pd
+from bs4 import BeautifulSoup
+import time
+import re
+import sqlite3
+
+ctx = ssl.create_default_context()
+ctx.check_hostname = False
+ctx.verify_mode = ssl.CERT_NONE
+
+client_id = "5d1d9dc014464420b77c8cf6df5295a4"
+client_secret = "e4e668f2b2d447508e384c1c8b549626"
+
+
+# Request an access token
+auth_response = requests.post("https://accounts.spotify.com/api/token", data={
+    "grant_type": "client_credentials",
+    "client_id": client_id,
+    "client_secret": client_secret
+})
+
+# Extract the access token from the response
+access_token = auth_response.json()["access_token"]
+
+# Define the header for your API requests
+header = {
+    "Authorization": "Bearer " + access_token
+}
+
+# List of Artist_ids
+artist_ids = ['4V4Z3qMCwYofWHtip6ePF6', '48sZWxnqspohWtxJNg7OsI', '7aA592KWirLsnfb5ulGWvU', 
+              '6yJ6QQ3Y5l0s0tn7b0arrO', '6PkSULcbxFKkxdgrmPGAvn', '718COspgdWOnwOFpJHRZHS', 
+              '6tpaMMCs8X6o8j9H5OmWmT', '00FQb4jTyendYWaN8pK0wa', '4IVAbR2w4JJNJDDRFP3E83', 
+              '7bu3H8JO7d0UbMoVzbo70s', '70rrdlPO77vFHx1GLER7WT', '3qiHUAX7zY4Qnjx8TNUzVx', 
+              '1aSxMhuvixZ8h9dK9jIDwL', '2QoU3awHVdcHS8LrZEKvSM', '1rKrEdI6GKirxWHxIUPYms', 
+              '2jzc5TC5TVFLXQlBNiIUzE', '0iOVhN3tnSvgDbcg25JoJb', '1U0sIzpRtDkvu1hXXzxh60', 
+              '03r4iKL2g2442PT9n2UKsx', '0Suv0tRrNrUlRzAy8aXjma', '5pKCCKE2ajJHZ9KAiaK11H', 
+              '34PLzyi7CdXUekiLHYyqXq', '1FClsNYBUoNFtGgzeG74dW', '1sXbwvCQLGZnaH0Jp2HTVc', 
+              '1FtBEIWAwvw5ymBen5GICR', '4V8LLVI7PbaPR0K2TGSxFF', '0wU0ByZ6OSInRD0ZmVfcIq', 
+              '1grN0519h2zYqpRtYbDZAl', '1hLiboQ98IQWhpKeP9vRFw', '4r63FhuTkUYltbVAg5TQnk', 
+              '5x3XbYsndFdDek8qj9pl2n', '5BwsX8bXOFC1YnqSlyfOKM', '20wkVLutqVOYrc0kxFs7rA', 
+              '0X2BH1fck6amBIoJhDVmmJ', '2RqrWplViWHSGLzlhmDcbt', '6qgnBH6iDM91ipVXv28OMu', 
+              '5oifjQw72WO7Jut07fVWMy', '3Gm5F95VdRxW3mqCn8RPBJ', '3TVXtAsR1Inumwj472S9r4', 
+              '1kM5rgJvkiDMOoKX56H6pX', '7gOdHgIoIKoe4i9Tta6qdD', '7wlFDEWiM5OoIAt8RSli8b', 
+              '7Hjbimq43OgxaBRpFXic4x', '6mKqFxGMS5TGDZI3XkT5Rt', '2BpAc5eK7Rz5GAwSp9UYXa', 
+              '4fXkvh05wFhuH77MfD4m9o', '6CWTBjOJK75cTE8Xv8u1kj', '6p70iKebfMSl8zbkiEwOtS', 
+              '4wyNyxs74Ux8UIDopNjIai', '6gc6oo3u2f7SqTd4mhe81O', '6vHBuUxrcpn1do5UaEJ7g6', 
+              '6Tw1ktF4xMmzaLLbe98I2z', '0ojcq9LJQWMawQdFDw3M0L', '2LIk90788K0zvyj2JJVwkJ', 
+              '7gi3jmwpUpNWdswT8eEprF', '23rleGXVOVVgTk3xgtmfE4', '1zuJe6b1roixEKMOtyrEak', 
+              '4S9EykWXhStSc15wEx8QFK', '56oDRnqbIiwx4mymNEv7dS', '5rX2c1zow6hCph8PnnU3kF', 
+              '43mhFhQ4JAknA7Ik1bOZuV', '5upLeyz8OjRZcbFuXOF59B', '1J6iGa2TNBDCrJzjsnI1a8', 
+              '163tK9Wjr9P9DmM0AVK7lm', '64M6ah0SkkRsnPGtGiRAbb', '4npEfmQ6YuiwW1GpUmaq3F', 
+              '7Ln80lUS6He07XvHI8qqHH', '3FfvYsEGaIb52QPXhg4DcH', '2lolQgalUvZDfp5vvVtTYV', 
+              '3Mcii5XWf6E0lrY3Uky4cA', '4sD9znwiVFx9cgRPZ42aQ1', '6XpXnnKHIhCOUbOLOJGe6o', 
+              '5o7DmXxAI7rg7qBUvcLq2s', '5R6GD31ZP8YPGIlt73Madf', '4vpDg7Y7fU982Ds30zawDA',
+              '1EpyA68dKpjf7jXmQL88Hy', '0TkqXdyWLsssJH7okthMPQ', '6IkfE2JyVoKwBZXvuytKX3', 
+              '7pv3MRGkgkXa9Qn8sMctxT', '28AyklUmMECPwdfo8NEsV0', '2iEvnFsWxR0Syqu2JNopAd']
+
+#Creation of lists for dataframes
+monthly_listeners_data = []
+artist_id_data = []
+artist_top_tracks = []
+stream_data = []
+now_column = datetime.now()
+now = datetime.now().strftime("%b %d %I%M%p")
+
+#Create Connection to Sqlite Database
+conn = sqlite3.connect('spotify_popularity.sqlite')
+cur = conn.cursor()
+
+#Monthly Listeners Script pt 1: API Pull
+
+for artist_id in artist_ids:
+    base_url = "https://open.spotify.com/artist/"
+    url = base_url + artist_id
+    print(url)
+    html = urllib.request.urlopen(url, context=ctx)
+    soup = BeautifulSoup(html, 'html.parser')
+    #print(soup)
+    monthly_listeners_div = soup.find('div', {'class': 'Type__TypeElement-sc-goli3j-0 ieTwfQ sMT6JaxLhI2QLVSevX_3 fjP8GyQyM5IWQvTxWk6W'})
+    monthly_listeners_text = monthly_listeners_div.text
+    monthly_listeners_count = monthly_listeners_text.split(' ')[0]
+    monthly_listeners_data.append({'Artist_ID':artist_id, 'Monthly_Listeners': monthly_listeners_count, 'Date': now_column})
+    print(monthly_listeners_count)
+    time.sleep(10)
+    
+monthly_listeners_filename = f"{now} Monthly Listeners.xlsx"
+df = pd.DataFrame(monthly_listeners_data)
+df.to_excel(monthly_listeners_filename, index=False)
+
+#Monthly Listeners Script pt 2: Send to SQLite Database
+
+df['Date'] = df['Date'].dt.strftime('%Y-%m-%d %H:%M:%S')
+
+for index, row in df.iterrows():
+    artist_id = row['Artist_ID']
+    monthly_listeners = row['Monthly_Listeners']
+    artist_id = row['Artist_ID']
+    date = row['Date']
+    cur.execute('''INSERT OR IGNORE INTO Monthly_Listeners (artist_id, monthly_listeners, date) 
+        VALUES (?, ?, ?)''', (artist_id, monthly_listeners, date))
+    cur.execute('SELECT id FROM Monthly_Listeners WHERE artist_id = ? AND date = ?', (artist_id, date))
+    artist_id = cur.fetchone()[0]
+
+conn.commit()
+
+#Artist Popularity Script pt 1: API Pull
+
+for artist_id in artist_ids:
+    artist_response = requests.get(f"https://api.spotify.com/v1/artists/{artist_id}", headers=header)
+    results = artist_response.json()
+    count = 0
+    artist_name = results['name']
+    artist_popularity = results['popularity']
+    artist_followers = results['followers']['total']
+    artist_id = results['id']
+    print(artist_name,artist_popularity,artist_followers)
+    time.sleep(1)
+    artist_id_data.append({'Artist_ID': artist_id, 'Artist_Name': artist_name, 'Artist_Popularity': artist_popularity, 'Artist_Followers': artist_followers, 'Date': now_column})
+
+now = datetime.now().strftime("%b %d %I%M%p")           
+artist_id_filename = f"{now} Artist Popularity.xlsx"
+df = pd.DataFrame(artist_id_data)
+df.to_excel(artist_id_filename, index=False)
+
+#Artist Popularity Script pt 2: Send to SQLite Database
+
+df['Date'] = df['Date'].dt.strftime('%Y-%m-%d %H:%M:%S')
+
+for index, row in df.iterrows():
+    artist_id = row['Artist_ID']
+    artist_name = row['Artist_Name']
+    artist_popularity = row['Artist_Popularity']
+    artist_followers = row['Artist_Followers']
+    date = row['Date']
+    cur.execute('''INSERT OR IGNORE INTO Artist_Popularity (artist_id, artist_name, artist_popularity, artist_followers, date) 
+        VALUES (?, ?, ?, ?, ?)''', (artist_id, artist_name, artist_popularity, artist_followers, date))
+    cur.execute('SELECT id FROM Artist_Popularity WHERE artist_id = ? AND date = ?', (artist_id, date))
+    artist_id = cur.fetchone()[0]
+
+conn.commit()
+
+#Top Tracks Popularity Script pt 1: API Pull
+
+for artist_id in artist_ids:
+    results = requests.get(f"https://api.spotify.com/v1/artists/{artist_id}/top-tracks", headers=header)
+    tracks = results['tracks']
+    count = 0
+    for track in tracks:
+        name = track['name']
+        #track_number = track['track_number']
+        count = count + 1
+        popularity = track['popularity']
+        artist = track['album']['artists'][0]['name']
+        artist_id = track['album']['artists'][0]['id']
+        album = track['album']['name']
+        album_id = track['album']['id']
+        track_id = track['id']
+        artist_top_tracks.append({'Track_ID': track_id, 'Track_Name': name, 'Track_Rank': count, 'Artist_Name': artist, 'Artist_ID': artist_id, 'Album_Name': album, 'Album_ID': album_id, 'Track_Popularity': popularity, 'Date': now_column})
+        time.sleep(1)
+        print(name, count, artist, album, album_id, popularity)
+        
+now = datetime.now().strftime("%b %d %I%M%p")        
+artist_top_tracks_filename = f"{now} Artist Top Tracks Pull.xlsx"
+df = pd.DataFrame(artist_top_tracks)
+df.to_excel(artist_top_tracks_filename, index=False)
+
+#Top Tracks Popularity Script pt 2: Send to SQLite Database
+
+df['Date'] = df['Date'].dt.strftime('%Y-%m-%d %H:%M:%S')
+
+for index, row in df.iterrows():
+    track_id = row['Track_ID']
+    track_name = row['Track_Name']
+    track_rank = row['Track_Rank']
+    artist_name = row['Artist_Name']
+    artist_id = row['Artist_ID']
+    album_name = row['Album_Name']
+    album_id = row['Album_ID']
+    track_popularity = row['Track_Popularity']
+    date = row['Date']
+    
+    cur.execute('''INSERT OR IGNORE INTO Artist_Top_Songs (track_id, track_name, track_rank, artist_name, artist_id, album_name, album_id, track_popularity, date) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''', (track_id, track_name, track_rank, artist_name, artist_id, album_name, album_id, track_popularity, date))
+    #print(f"Inserted {track_name} by {artist_name} with ID {artist_id} and date {date}")
+    cur.execute('SELECT id FROM Artist_Top_Songs WHERE artist_id = ? AND date = ?', (artist_id, date))
+    artist_id = cur.fetchone()[0]
+
+conn.commit()
